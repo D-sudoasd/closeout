@@ -1,0 +1,26 @@
+name: closeout
+version: 2.0.0
+repository: https://github.com/D-sudoasd/closeout
+minimum_git_version: 2.30
+minimum_pwsh_version: 7
+platform: windows (scripts are PowerShell; logic portable with pwsh)
+files:
+  - SKILL.md
+  - USER.example.md
+  - USER.md (optional local; installer preserves existing; not in git)
+  - VERSION
+  - CHANGELOG.md
+  - install.ps1
+  - INSTALL.md
+  - LICENSE
+  - README.md
+  - README.zh-CN.md
+  - references/
+  - scripts/
+related_optional_skills:
+  - diagnosing-bugs
+  - check-work
+  - yeet
+  - gh-fix-ci
+  - gh-address-comments
+notes: No machine hostname, username, or absolute source paths in this pack.

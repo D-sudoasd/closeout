@@ -1,0 +1,12 @@
+# Local preferences — never ship
+USER.md
+USER.local.yaml
+*.backup-*
+.staging-*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  self-check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Self-check skill layout
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File .\scripts\self_check.ps1 -SkillRoot .
+
+      - name: Smoke status + prune (temp repo)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tmp = Join-Path $env:RUNNER_TEMP "closeout-ci"
+          New-Item -ItemType Directory -Path $tmp | Out-Null
+          $repo = Join-Path $tmp "repo"
+          New-Item -ItemType Directory -Path $repo | Out-Null
+          Push-Location $repo
+          git init -b main
+          git config user.email "ci@example.com"
+          git config user.name "CI"
+          "a" | Set-Content file.txt
+          git add file.txt
+          git commit -m "init"
+          git branch feat/demo
+          git checkout feat/demo
+          "b" | Set-Content file.txt
+          git add file.txt
+          git commit -m "feat"
+          git checkout main
+          git merge --no-ff feat/demo -m "merge feat"
+          Pop-Location
+          pwsh -NoProfile -File .\scripts\status.ps1 -RepoRoot $repo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $out = pwsh -NoProfile -File .\scripts\prune_merged.ps1 -RepoRoot $repo 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'feat/demo') { throw 'expected feat/demo candidate' }
+          if ($out -notmatch 'ancestor-merged') { throw 'expected ancestor-merged' }
+          Write-Host "smoke OK"
