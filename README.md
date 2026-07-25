@@ -8,62 +8,73 @@
 
 **Ship the work. Leave a clean desk.**
 
-An agent skill for **end-to-end git closeout**: status → verify → commit → push → PR → merge gate → prune — with **authorization boundaries**, **squash-merge awareness**, and an **evidence report** you can re-check.
+Agent skill for end-to-end git closeout: status → verify → commit → push → PR → merge gate → prune — with **authorization boundaries**, **squash-merge awareness**, and an **evidence report** you can re-check.
 
-[中文说明](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [Install](INSTALL.md) · [Auth matrix](references/auth-matrix.md)
+[中文说明](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [Install](INSTALL.md) · [Auth matrix](references/auth-matrix.md) · [Promote kit](docs/PROMOTE.md)
+
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="closeout hero: ship work, leave a clean desk, with evidence report card" />
+</p>
 
 ---
 
-## Why closeout?
+## Why not “just let the agent push”?
 
-Unguarded “just commit and push” agents are great at shipping — and also great at:
-
-| Risk | What closeout does |
-|------|--------------------|
+| Risk with unguarded agents | What closeout does |
+|----------------------------|--------------------|
 | Blind `git add -A` | Intentional stage; skip secrets / bulk raw data |
-| Pushing red verify | Unified fail policy: stop, local-only, or explicit override |
-| Squash merge → “no branches to prune” | Detect via **PR head SHA == branch tip** |
+| Pushing red verify | Fail stops push unless you re-authorize |
+| Squash merge → “nothing to prune” | SAFE when **PR head SHA == branch tip** |
 | Treating `origin/HEAD` as a branch | Structured `for-each-ref` (skip symrefs) |
-| “I showed the list” = delete remote | **List ≠ authorize**; merge & remote delete are separate |
-| “done” after a failed `git push --delete` | `Invoke-Git` exit codes + **post-delete recheck** |
-| Overwriting your preferences on upgrade | `USER.example.md` shipped; **`USER.md` preserved** |
+| “I showed the list” = delete remote | **List ≠ authorize** |
+| “done” after a failed delete | Exit codes + **post-delete recheck** |
+| Upgrade wipes preferences | `USER.example.md` ships; **`USER.md` stays** |
+
+<p align="center">
+  <img src="assets/readme/before-after.svg" width="100%" alt="Before unguarded agent push versus after closeout evidence-based clean desk" />
+</p>
 
 ---
 
-## What you get
+## How it works
 
-```text
-收工 / 收尾 / /closeout
-  0  status      read-only one-pager
-  0b plan        will / will-not execution list
-  2  verify      commands + exit codes
-  3  commit      intentional + pre/post HEAD
-  4  push        local SHA == remote SHA
-  5  PR          reuse or create; head SHA check
-  6  merge       gated (ask first by default)
-  7  prune       ancestor OR squash-PR match; recheck
+Say **收工**, **ship**, or **`/closeout`** to a compatible agent (Grok / Codex).
+
+<p align="center">
+  <img src="assets/readme/workflow.svg" width="100%" alt="closeout workflow: status, plan, verify, commit push PR, merge ask, prune with SAFE and HOLD gates" />
+</p>
+
+| Phase | Action | Gate |
+|------:|--------|------|
+| 0 | `status.ps1` one-pager | report only |
+| 0b | will / will-not plan | user OK or USER default |
+| 2 | verify + exit codes | green, or explicit fail policy |
+| 3–5 | commit · push · PR | SHA + PR head checks |
+| 6 | merge | **ask first** by default |
+| 7 | prune | list → confirm; remote separate |
+
+**Scripts alone** (no agent required):
+
+```powershell
+$Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
+$Repo  = "D:\path\to\your\repo"
+
+pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
+pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo          # dry-run
+# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
+# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply -DeleteRemote
 ```
 
-Scripts (run without the agent if you want):
-
-| Script | Role |
-|--------|------|
-| `scripts/status.ps1` | Dirty classification, in-progress ops, redacted remotes, PR |
-| `scripts/prune_merged.ps1` | Safe candidate list / delete with evidence |
-| `scripts/self_check.ps1` | Install layout + parse check |
-| `install.ps1` | Upgrade with backup + keep `USER.md` |
-
 ---
 
-## Install
+## Install (≈30 seconds)
 
 ### Grok
 
 ```powershell
-$dst = Join-Path $env:USERPROFILE ".grok\skills\closeout"
-git clone https://github.com/D-sudoasd/closeout.git $dst
-# or upgrade an existing clone:
-# git -C $dst pull
+git clone https://github.com/D-sudoasd/closeout.git "$env:USERPROFILE\.grok\skills\closeout"
+# upgrade later:
+# git -C "$env:USERPROFILE\.grok\skills\closeout" pull
 ```
 
 ### Codex / other agents
@@ -72,38 +83,14 @@ git clone https://github.com/D-sudoasd/closeout.git $dst
 git clone https://github.com/D-sudoasd/closeout.git "$env:USERPROFILE\.codex\skills\closeout"
 ```
 
-### Zip / copy install (preserves local prefs)
+### Copy install (keeps local `USER.md`)
 
 ```powershell
-# from a release asset or clone root:
 pwsh -File .\install.ps1 -Source .
 ```
 
-Then restart the agent session and say **收工**, **ship**, or **`/closeout`**.
-
-Copy `USER.example.md` → `USER.md` only on first install if you need local overrides.
-
----
-
-## Quick start
-
-```powershell
-$Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
-$Repo  = "D:\path\to\your\repo"
-
-# Read-only status
-pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
-
-# Dry-run prune (never deletes without -Apply)
-pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo
-
-# After you review SAFE lines:
-# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
-# Remote delete only with explicit OK:
-# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply -DeleteRemote
-```
-
-Requirements: **git**, **PowerShell 7+** (`pwsh`). **GitHub CLI (`gh`)** for PR/merge and squash-branch detection.
+Needs: **git**, **pwsh 7+**, and **`gh`** for PR/merge + squash detection.  
+Restart the agent session, then say **收工**.
 
 ---
 
@@ -111,10 +98,10 @@ Requirements: **git**, **PowerShell 7+** (`pwsh`). **GitHub CLI (`gh`)** for PR/
 
 ```text
 tip is ancestor of default     → SAFE (classic merge)
-merged PR + headOid == tip     → SAFE (squash / rebase merge)
+merged PR + headOid == tip     → SAFE (squash / rebase)
 merged PR but tip moved        → HOLD (new commits after merge)
 no gh / no PR                  → report only
-origin/HEAD / current / default → never delete
+origin/HEAD · current · default → never delete
 ```
 
 ---
@@ -129,16 +116,7 @@ origin/HEAD / current / default → never delete
 | 清分支 | **List only** |
 | Explicit remote delete | Remote prune |
 
-Showing a candidate list is **not** permission to delete remotes. Details: [references/auth-matrix.md](references/auth-matrix.md).
-
----
-
-## Safety defaults
-
-- No force-push of default branch  
-- No `branch -D` / `reset --hard` / `clean -fdx` without explicit OK  
-- No secrets / bulk scientific raw data in commits  
-- Evidence report: SHA, PR, skip reasons, clean-desk YES/NO with basis  
+Details: [references/auth-matrix.md](references/auth-matrix.md).
 
 ---
 
@@ -146,25 +124,21 @@ Showing a candidate list is **not** permission to delete remotes. Details: [refe
 
 ```text
 closeout/
-  SKILL.md              # agent entry (Grok / compatible)
-  USER.example.md       # shipped defaults template
-  VERSION / CHANGELOG.md
-  install.ps1 / INSTALL.md
-  references/           # phases, auth, clean desk, report template
-  scripts/              # status, prune, self_check, common
+  SKILL.md              agent entry
+  USER.example.md       shipped defaults (copy → USER.md locally)
+  assets/readme/        hero · workflow · before-after
+  references/           phases · auth · clean desk · report
+  scripts/              status · prune · self_check · common
+  docs/PROMOTE.md       shareable posts
 ```
 
 ---
 
 ## Contributing
 
-Issues and PRs welcome — especially:
+Issues and PRs welcome — especially cross-platform path edges, extra prune evidence sources, and Pester fixtures.
 
-- Cross-platform path / `pwsh` edge cases  
-- Extra prune evidence sources  
-- Pester fixtures for the scenario matrix in `CHANGELOG` / docs  
-
-Please do **not** commit a real `USER.md` with personal tokens or machine paths.
+Please **do not** commit a real `USER.md`.
 
 ---
 

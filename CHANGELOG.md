@@ -2,6 +2,12 @@
 
 ## 2.0.0 — 2026-07-25
 
+### Docs / packaging
+
+- Public GitHub repo + Release + CI
+- README hero / workflow / before-after SVG
+- Bilingual README polish + `docs/PROMOTE.md` share kit
+
 ### Fixed (safety / correctness)
 
 - **Squash/rebase merge detection** for prune: ancestor check + merged PR `headRefOid` vs branch tip; tip-moved branches are report-only.

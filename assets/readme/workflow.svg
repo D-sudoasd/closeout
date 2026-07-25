@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-labelledby="title desc">
+  <title id="title">closeout workflow phases</title>
+  <desc id="desc">Phases: status, plan, verify, commit, push, PR, optional merge, prune with separate authorization for remote delete.</desc>
+  <rect width="1200" height="340" rx="28" fill="#0B0F14"/>
+  <rect x="1" y="1" width="1198" height="338" rx="27" fill="none" stroke="#243041"/>
+
+  <text x="48" y="48" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16">WORKFLOW</text>
+  <text x="48" y="84" fill="#F4F1EA" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif" font-size="30" font-weight="700">Read · Plan · Ship · Gate · Clean</text>
+
+  <!-- phase cards row 1 -->
+  <g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
+    <!-- 0 -->
+    <rect x="48" y="118" width="150" height="84" rx="14" fill="#121A24" stroke="#2C3A4F"/>
+    <text x="64" y="148" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">0</text>
+    <text x="64" y="176" fill="#F4F1EA" font-size="20" font-weight="600">status</text>
+    <!-- arrow -->
+    <path d="M206 160h18" stroke="#3DDC97" stroke-width="2"/>
+    <path d="M220 154l8 6-8 6" fill="none" stroke="#3DDC97" stroke-width="2"/>
+
+    <!-- 0b -->
+    <rect x="236" y="118" width="150" height="84" rx="14" fill="#121A24" stroke="#2C3A4F"/>
+    <text x="252" y="148" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">0b</text>
+    <text x="252" y="176" fill="#F4F1EA" font-size="20" font-weight="600">plan</text>
+    <path d="M394 160h18" stroke="#3DDC97" stroke-width="2"/>
+    <path d="M408 154l8 6-8 6" fill="none" stroke="#3DDC97" stroke-width="2"/>
+
+    <!-- 2 -->
+    <rect x="424" y="118" width="150" height="84" rx="14" fill="#121A24" stroke="#2C3A4F"/>
+    <text x="440" y="148" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">2</text>
+    <text x="440" y="176" fill="#F4F1EA" font-size="20" font-weight="600">verify</text>
+    <path d="M582 160h18" stroke="#3DDC97" stroke-width="2"/>
+    <path d="M596 154l8 6-8 6" fill="none" stroke="#3DDC97" stroke-width="2"/>
+
+    <!-- 3-5 -->
+    <rect x="612" y="118" width="190" height="84" rx="14" fill="#123528" stroke="#2F8F62"/>
+    <text x="628" y="148" fill="#3DDC97" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">3–5</text>
+    <text x="628" y="176" fill="#F4F1EA" font-size="20" font-weight="600">commit · push · PR</text>
+    <path d="M810 160h18" stroke="#F0B429" stroke-width="2"/>
+    <path d="M824 154l8 6-8 6" fill="none" stroke="#F0B429" stroke-width="2"/>
+
+    <!-- 6 -->
+    <rect x="840" y="118" width="150" height="84" rx="14" fill="#2A2210" stroke="#8A6A1A"/>
+    <text x="856" y="148" fill="#F0B429" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">6 ask</text>
+    <text x="856" y="176" fill="#F4F1EA" font-size="20" font-weight="600">merge</text>
+    <path d="M998 160h18" stroke="#3DDC97" stroke-width="2"/>
+    <path d="M1012 154l8 6-8 6" fill="none" stroke="#3DDC97" stroke-width="2"/>
+
+    <!-- 7 -->
+    <rect x="1028" y="118" width="124" height="84" rx="14" fill="#121A24" stroke="#2C3A4F"/>
+    <text x="1044" y="148" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">7</text>
+    <text x="1044" y="176" fill="#F4F1EA" font-size="20" font-weight="600">prune</text>
+  </g>
+
+  <!-- gates -->
+  <g transform="translate(48 230)" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, sans-serif">
+    <rect x="0" y="0" width="1104" height="78" rx="16" fill="#121A24" stroke="#2C3A4F"/>
+    <text x="24" y="34" fill="#8B93A7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">GATES</text>
+    <text x="24" y="58" fill="#C8D0DC" font-size="18">verify red → stop push · list ≠ delete remote · tip-moved after PR → HOLD</text>
+    <rect x="820" y="20" width="100" height="38" rx="10" fill="#123528" stroke="#2F8F62"/>
+    <text x="844" y="45" fill="#3DDC97" font-size="16" font-weight="600">SAFE</text>
+    <rect x="936" y="20" width="100" height="38" rx="10" fill="#2A2210" stroke="#8A6A1A"/>
+    <text x="960" y="45" fill="#F0B429" font-size="16" font-weight="600">HOLD</text>
+  </g>
+</svg>

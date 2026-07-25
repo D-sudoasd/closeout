@@ -10,3 +10,7 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# Local scratch
+*.log
+_tmp/
