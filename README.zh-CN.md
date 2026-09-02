@@ -23,11 +23,12 @@
 |-------------------|-----------------|
 | 盲 `git add -A` | 有意识暂存；跳过密钥 / 大批原始数据 |
 | 验证红了还推 | 默认停推；仅本地或二次明确授权 |
-| squash 后清不掉分支 | PR head SHA 与 tip 一致才 SAFE |
+| squash 后清不掉分支 | PR head SHA 与 tip 一致才 SAFE；确认后 `-Apply` **真的会删掉**本地支 |
 | 把 `origin/HEAD` 当分支删 | 结构化枚举，跳过符号引用 |
 | 「展示了列表」= 授权删远程 | **展示 ≠ 授权** |
 | 命令失败却报告成功 | 检查退出码 + 删除后复查 |
 | 升级冲掉个人配置 | 保留 `USER.md` |
+| 脚本在别的目录运行 | 传**绝对路径** `-RepoRoot`；`git` 和 `gh` 都跟这个仓库，不跟进程 cwd |
 
 <p align="center">
   <img src="assets/readme/before-after.svg" width="100%" alt="裸 agent 推送 vs closeout 证据化 clean desk" />
@@ -47,20 +48,24 @@
 |-----:|--------|------|
 | 0 | 只读状态 | 出报告 |
 | 0b | 执行清单 | 确认或按 USER |
-| 2 | 验证 + 退出码 | 通过或明确失败策略 |
+| 2 | 验证 + 退出码（仓库测试；不依赖额外 skill） | 通过或明确失败策略 |
 | 3–5 | 提交 · 推送 · PR | SHA / head 核对 |
 | 6 | 合并 | **默认先问** |
 | 7 | 清分支 | 先列表再确认；远程单独授权 |
 
-无 agent 也可直接跑脚本：
+无 agent 也可直接跑脚本。务必把**目标仓库**写成 `-RepoRoot` 的绝对路径（cwd 可以是任意目录）：
 
 ```powershell
 $Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
 $Repo  = "D:\path\to\repo"
 
 pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
-pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo
+pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo          # 只列表
+# 确认 SAFE 列表后：
+# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
 ```
+
+`prune_merged.ps1` 会读 `USER.md` 里的 `never_delete_branches` 与 `default_branch_prefer`。squash-SAFE 在 `-Apply` 时即使用 `git branch -d` 会拒绝也会删掉。
 
 ---
 
@@ -70,8 +75,8 @@ pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo
 git clone https://github.com/D-sudoasd/closeout.git "$env:USERPROFILE\.grok\skills\closeout"
 ```
 
-升级：`git -C ...\closeout pull`  
-或：`pwsh -File .\install.ps1 -Source .`（保留本机 `USER.md`）
+升级已有 clone：`git -C ...\closeout pull`  
+复制安装（Source 与 Destination **不能相同**）：`pwsh -File .\install.ps1 -Source <解压目录>`（保留本机 `USER.md`）
 
 依赖：**git**、**pwsh 7+**、做 PR/squash 识别需要 **`gh`**。  
 重启会话后说 **收工** 即可。
@@ -94,7 +99,7 @@ PR 已合但 tip 已变          → HOLD
 
 | 你说 | 默认范围 |
 |------|----------|
-| 收工 / `/closeout` | 状态 + 验证 + 清单；push/PR 看 `USER.md` |
+| 收工 / `/closeout` | 状态 + 验证 + **清单**；默认 `confirm_push=true`：一次确认覆盖提交→推送→PR。不自动合并、不删远程。 |
 | 提交并推 | 验证 + 提交 + 推送 |
 | 合并 | 检查后合并 |
 | 清分支 | **只列表** |

@@ -24,11 +24,12 @@ Agent skill for end-to-end git closeout: status → verify → commit → push �
 |----------------------------|--------------------|
 | Blind `git add -A` | Intentional stage; skip secrets / bulk raw data |
 | Pushing red verify | Fail stops push unless you re-authorize |
-| Squash merge → “nothing to prune” | SAFE when **PR head SHA == branch tip** |
+| Squash merge → “nothing to prune” | SAFE when **PR head SHA == branch tip**; authorized `-Apply` actually deletes the local ref |
 | Treating `origin/HEAD` as a branch | Structured `for-each-ref` (skip symrefs) |
 | “I showed the list” = delete remote | **List ≠ authorize** |
 | “done” after a failed delete | Exit codes + **post-delete recheck** |
 | Upgrade wipes preferences | `USER.example.md` ships; **`USER.md` stays** |
+| Scripts run from another directory | Pass an **absolute `-RepoRoot`**; `git` and `gh` follow that repo (not process cwd) |
 
 <p align="center">
   <img src="assets/readme/before-after.svg" width="100%" alt="Before unguarded agent push versus after closeout evidence-based clean desk" />
@@ -48,22 +49,25 @@ Say **收工**, **ship**, or **`/closeout`** to a compatible agent (Grok / Codex
 |------:|--------|------|
 | 0 | `status.ps1` one-pager | report only |
 | 0b | will / will-not plan | user OK or USER default |
-| 2 | verify + exit codes | green, or explicit fail policy |
+| 2 | verify + exit codes (repo tests; no required extra skill) | green, or explicit fail policy |
 | 3–5 | commit · push · PR | SHA + PR head checks |
 | 6 | merge | **ask first** by default |
 | 7 | prune | list → confirm; remote separate |
 
-**Scripts alone** (no agent required):
+**Scripts alone** (no agent required). Always pass the **target repo** as `-RepoRoot` — cwd can be anywhere:
 
 ```powershell
 $Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
-$Repo  = "D:\path\to\your\repo"
+$Repo  = "D:\path\to\your\repo"   # absolute path
 
 pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
 pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo          # dry-run
+# after you confirm the SAFE list:
 # pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
 # pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply -DeleteRemote
 ```
+
+`prune_merged.ps1` reads `never_delete_branches` and `default_branch_prefer` from `USER.md` (else `USER.example.md`). Squash-SAFE locals are removed on `-Apply` even when `git branch -d` would refuse.
 
 ---
 
@@ -86,8 +90,10 @@ git clone https://github.com/D-sudoasd/closeout.git "$env:USERPROFILE\.codex\ski
 ### Copy install (keeps local `USER.md`)
 
 ```powershell
-pwsh -File .\install.ps1 -Source .
+pwsh -File .\install.ps1 -Source . -Destination "$env:USERPROFILE\.grok\skills\closeout"
 ```
+
+Do **not** run the installer with Source and Destination the same folder (that would be the live clone). Upgrade an existing clone with `git pull`.
 
 Needs: **git**, **pwsh 7+**, and **`gh`** for PR/merge + squash detection.  
 Restart the agent session, then say **收工**.
@@ -110,7 +116,7 @@ origin/HEAD · current · default → never delete
 
 | You say | Default scope |
 |---------|----------------|
-| 收工 / `/closeout` | Status + verify + plan; push/PR per `USER.md` |
+| 收工 / `/closeout` | Status + verify + **plan**; shipped `confirm_push=true` → one OK covers commit→push→PR. Never auto-merge or remote-delete. |
 | 提交并推 | Verify + commit + push |
 | 合并 | Merge after checks |
 | 清分支 | **List only** |
@@ -128,7 +134,7 @@ closeout/
   USER.example.md       shipped defaults (copy → USER.md locally)
   assets/readme/        hero · workflow · before-after
   references/           phases · auth · clean desk · report
-  scripts/              status · prune · self_check · common
+  scripts/              status · prune · self_check · common · fixture tests
   docs/PROMOTE.md       shareable posts
 ```
 
@@ -136,7 +142,7 @@ closeout/
 
 ## Contributing
 
-Issues and PRs welcome — especially cross-platform path edges, extra prune evidence sources, and Pester fixtures.
+Issues and PRs welcome — especially cross-platform path edges, extra prune evidence sources, and more fixture cases (`scripts/test_fixtures.ps1`).
 
 Please **do not** commit a real `USER.md`.
 
