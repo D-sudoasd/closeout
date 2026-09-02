@@ -253,7 +253,8 @@ exit 1
       '-Destination', $pack
     )
     if ($r.ExitCode -eq 0) { throw "install succeeded for Source==Destination; must fail closed`n$($r.Combined)" }
-    if ($r.Combined -notmatch 'same path' -or $r.Combined -notmatch 'Refusing to move') {
+    $flat = ($r.Combined -replace '\s+', ' ')
+    if ($flat -notmatch 'same path' -or $flat -notmatch 'Refusing to move') {
       throw "install did not fail on the Source==Destination guard. output:`n$($r.Combined)"
     }
     if ($r.Combined -match 'Backed up previous install' -or $r.Combined -match 'INSTALL FAILED') {
@@ -287,7 +288,8 @@ exit 1
       '-Destination', $parent
     )
     if ($r.ExitCode -eq 0) { throw "nested Source should fail`n$($r.Combined)" }
-    if ($r.Combined -notmatch 'Source is inside Destination') {
+    $nestedFlat = ($r.Combined -replace '\s+', ' ')
+    if ($nestedFlat -notmatch 'Source is inside Destination') {
       throw "missing nested-source guard. output:`n$($r.Combined)"
     }
     if (-not (Test-Path -LiteralPath (Join-Path $child 'SKILL.md'))) {
