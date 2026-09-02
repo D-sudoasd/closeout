@@ -8,7 +8,7 @@
 
 **Ship the work. Leave a clean desk.**
 
-Agent skill for end-to-end git closeout: status → verify → commit → push → PR → merge gate → prune — with **authorization boundaries**, **squash-merge awareness**, and an **evidence report** you can re-check.
+Agent skill for end-to-end git closeout: plan → verify → commit → push → PR → immediate merge → temp/branch cleanup — with **one explicit plan confirmation**, **resumable checkpoints**, and a re-checkable evidence report.
 
 [中文说明](README.zh-CN.md) · [Changelog](CHANGELOG.md) · [Install](INSTALL.md) · [Auth matrix](references/auth-matrix.md) · [Promote kit](docs/PROMOTE.md)
 
@@ -47,14 +47,14 @@ Say **收工**, **ship**, or **`/closeout`** to a compatible agent (Grok / Codex
 
 | Phase | Action | Gate |
 |------:|--------|------|
-| 0 | `status.ps1` one-pager | report only |
-| 0b | will / will-not plan | user OK or USER default |
-| 2 | verify + exit codes (repo tests; no required extra skill) | green, or explicit fail policy |
-| 3–5 | commit · push · PR | SHA + PR head checks |
-| 6 | merge | **ask first** by default |
-| 7 | prune | list → confirm; remote separate |
+| 0 | status and candidate scan | external `plan.json` |
+| 0b | execution plan | explicit plan confirmation |
+| 2 | verify and record exit codes | green, or explicit no-test override |
+| 3–5 | intentional commit · push · PR | file and SHA checks |
+| 6 | immediate squash merge attempt | no wait or bypass |
+| 7 | temp and merged-branch cleanup | plan-listed SAFE objects only |
 
-**Scripts alone** (no agent required). Always pass the **target repo** as `-RepoRoot` — cwd can be anywhere:
+**Scripts alone** (no agent required). Use the full orchestrator and always pass the **target repo** as `-RepoRoot` — cwd can be anywhere:
 
 ```powershell
 $Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
@@ -62,12 +62,16 @@ $Repo  = "D:\path\to\your\repo"   # absolute path
 
 pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
 pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo          # dry-run
-# after you confirm the SAFE list:
-# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
-# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply -DeleteRemote
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Plan
+# after reviewing plan.json and confirming its listed actions:
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Apply -PlanFile <plan.json>
+# after an interruption or a failed external step:
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Resume -StateFile <state.json>
 ```
 
-`prune_merged.ps1` reads `never_delete_branches` and `default_branch_prefer` from `USER.md` (else `USER.example.md`). Squash-SAFE locals are removed on `-Apply` even when `git branch -d` would refuse.
+`closeout.ps1` writes plan, state, events, and the evidence report outside the repository. `cleanup_temp.ps1` deletes only allowlisted regenerable caches; generic `tmp`, `temp`, `build`, and `dist` are not defaults. `prune_merged.ps1` accepts `-OnlyBranches`, and squash-SAFE locals are removed on `-Apply` even when `git branch -d` would refuse.
+Verification commands can be supplied with `-VerifyCommand "..."` or through `closeout.verify.json` with a `commands` array; full-run is BLOCKED by default when no repository-specific verification exists.
+Exit codes: `0` means complete, `1` means a phase failed, and `3` means the plan is BLOCKED or stale; resume failures with the recorded state file.
 
 ---
 
@@ -116,7 +120,7 @@ origin/HEAD · current · default → never delete
 
 | You say | Default scope |
 |---------|----------------|
-| 收工 / `/closeout` | Status + verify + **plan**; shipped `confirm_push=true` → one OK covers commit→push→PR. Never auto-merge or remote-delete. |
+| 收工 / `/closeout` | Status + plan; one OK covers the listed commit→push→PR→immediate merge→cleanup actions. |
 | 提交并推 | Verify + commit + push |
 | 合并 | Merge after checks |
 | 清分支 | **List only** |
@@ -134,7 +138,7 @@ closeout/
   USER.example.md       shipped defaults (copy → USER.md locally)
   assets/readme/        hero · workflow · before-after
   references/           phases · auth · clean desk · report
-  scripts/              status · prune · self_check · common · fixture tests
+  scripts/              closeout · cleanup_temp · status · prune · test fixtures
   docs/PROMOTE.md       shareable posts
 ```
 

@@ -1,5 +1,5 @@
 name: closeout
-version: 2.1.0
+version: 2.2.0
 repository: https://github.com/D-sudoasd/closeout
 minimum_git_version: 2.30
 minimum_pwsh_version: 7

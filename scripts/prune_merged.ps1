@@ -8,6 +8,7 @@
 
   Default is dry-run. Use -Apply to delete local; -DeleteRemote for remotes
   (still requires explicit -DeleteRemote; never implied by -Apply alone).
+  Use -OnlyBranches to restrict classification and deletion to plan-listed names.
 
   Every git command checks exit codes. Deletes are re-checked after execution.
 #>
@@ -15,6 +16,7 @@ param(
   [string]$RepoRoot = '.',
   [string]$DefaultBranch = '',
   [string[]]$NeverDelete = @(),
+  [string[]]$OnlyBranches = @(),
   [string]$UserConfigPath = '',
   [string]$MergedPrJson = '',
   [switch]$Apply,
@@ -26,6 +28,24 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 . (Join-Path $here 'common.ps1')
+
+trap {
+  $message = Protect-CloseoutText "$($_)"
+  if ($Json) {
+    [ordered]@{
+      status = 'FAILED'
+      error_code = 'PRUNE_FAILED'
+      error = $message
+      default_branch = if ($DefaultBranch) { $DefaultBranch } else { $null }
+      current = if ($current) { $current } else { $null }
+      dry_run = [bool](-not $Apply -or $WhatIf)
+      delete_remote = [bool]$DeleteRemote
+      only_branches = @($OnlyBranches)
+    } | ConvertTo-Json -Depth 8
+    exit 1
+  }
+  throw
+}
 
 $RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
 $dry = -not $Apply
@@ -40,6 +60,10 @@ $protect = New-Object 'System.Collections.Generic.HashSet[string]' ([StringCompa
 foreach ($n in @($userCfg.never_delete_branches)) { if ($n) { [void]$protect.Add($n) } }
 foreach ($n in @($NeverDelete)) { if ($n) { [void]$protect.Add($n) } }
 $NeverDelete = @($protect)
+$only = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($n in @($OnlyBranches)) {
+  if ($n -and $n.Trim()) { [void]$only.Add($n.Trim()) }
+}
 
 $mergedPrStubs = $null
 if ($MergedPrJson) {
@@ -56,6 +80,7 @@ if (-not $DefaultBranch) {
 
 $current = (Invoke-Git -RepoRoot $RepoRoot -Arguments @('branch', '--show-current') -AllowFailure).Output.Trim()
 $fetch = Invoke-Git -RepoRoot $RepoRoot -Arguments @('fetch', '--prune', 'origin') -AllowFailure
+$fetchFailed = ($fetch.ExitCode -ne 0)
 if ($fetch.ExitCode -ne 0) {
   Write-Output "WARN: git fetch --prune origin failed (exit $($fetch.ExitCode)); continuing with local state"
   Write-Output $fetch.Output
@@ -71,6 +96,33 @@ if (-not $defaultTip) {
 }
 
 $ghOk = Test-CommandAvailable -Name 'gh'
+
+function Get-OpenPrForHead {
+  param([Parameter(Mandatory)][string]$HeadBranch)
+
+  if (-not $ghOk) {
+    return [pscustomobject]@{ status = 'unavailable'; pr = $null; detail = 'gh unavailable' }
+  }
+  $r = Invoke-Gh -RepoRoot $RepoRoot -Arguments @(
+    'pr', 'list', '--state', 'all', '--head', $HeadBranch, '--limit', '20',
+    '--json', 'number,url,state,baseRefName,headRefName,headRefOid'
+  ) -AllowFailure
+  if ($r.ExitCode -ne 0) {
+    return [pscustomobject]@{ status = 'unavailable'; pr = $null; detail = (Protect-CloseoutText $r.Output) }
+  }
+  try { $items = @(($r.Output | ConvertFrom-Json)) } catch {
+    return [pscustomobject]@{ status = 'unavailable'; pr = $null; detail = 'open PR response was not valid JSON' }
+  }
+  $open = @($items | Where-Object { $_.state -eq 'OPEN' -and $_.headRefName -eq $HeadBranch })
+  if ($open.Count -gt 0) {
+    return [pscustomobject]@{ status = 'open'; pr = $open[0]; detail = "open PR #$($open[0].number)" }
+  }
+  $closed = @($items | Where-Object { $_.state -eq 'CLOSED' -and $_.headRefName -eq $HeadBranch })
+  if ($closed.Count -gt 0) {
+    return [pscustomobject]@{ status = 'closed-unmerged'; pr = $closed[0]; detail = "closed unmerged PR #$($closed[0].number)" }
+  }
+  return [pscustomobject]@{ status = 'none'; pr = $null; detail = 'no open PR for head' }
+}
 
 function Get-LocalBranchNames {
   param([string]$Root)
@@ -114,9 +166,9 @@ function Classify-Branch {
     $result.evidence += 'is current branch'
     return [pscustomobject]$result
   }
-  if ($Scope -eq 'local' -and ($wtBranches -contains $Name)) {
+  if ($wtBranches -contains $Name) {
     $result.reason = 'worktree-locked'
-    $result.evidence += 'checked out in another worktree'
+    $result.evidence += 'checked out in a worktree; keep both local and remote refs'
     return [pscustomobject]$result
   }
   if (-not $TipSha) {
@@ -125,8 +177,37 @@ function Classify-Branch {
     return [pscustomobject]$result
   }
 
-  # 1) ancestor merge
+  # 1) ancestor merge, but only after checking that no open PR still uses the
+  # branch. An ancestor tip can still be the head of a follow-up PR.
   $isAncestor = Test-IsAncestor -RepoRoot $RepoRoot -PossibleAncestor $TipSha -Descendant $defaultTip
+  $openCheck = Get-OpenPrForHead -HeadBranch $Name
+  if ($openCheck.status -eq 'open') {
+    $result.reason = 'open-pr'
+    $result.pr_number = $openCheck.pr.number
+    $result.pr_url = $openCheck.pr.url
+    $result.evidence += "$($openCheck.detail); never delete a branch with an open PR"
+    $result.action = 'report-only-open-pr'
+    return [pscustomobject]$result
+  }
+  if ($openCheck.status -eq 'closed-unmerged') {
+    $result.reason = 'closed-unmerged-pr'
+    $result.pr_number = $openCheck.pr.number
+    $result.pr_url = $openCheck.pr.url
+    $result.evidence += "$($openCheck.detail); never reopen or delete its branch automatically"
+    $result.action = 'report-only-closed-unmerged-pr'
+    return [pscustomobject]$result
+  }
+  if ($openCheck.status -ne 'none') {
+    $result.evidence += "open PR check unavailable: $($openCheck.detail)"
+    if ($isAncestor) {
+      $result.reason = 'ancestor-merged'
+      $result.action = 'report-only-open-pr-unknown'
+    } else {
+      $result.reason = 'uncertain-open-pr'
+      $result.action = 'report-only'
+    }
+    return [pscustomobject]$result
+  }
   if ($isAncestor) {
     $result.reason = 'ancestor-merged'
     $result.safe_to_delete = $true
@@ -144,7 +225,7 @@ function Classify-Branch {
     return [pscustomobject]$result
   }
 
-  $pr = Get-MergedPrForHead -HeadBranch $Name -RepoRoot $RepoRoot -StubRecords $mergedPrStubs
+  $pr = Get-MergedPrForHead -HeadBranch $Name -RepoRoot $RepoRoot -BaseBranch $DefaultBranch -StubRecords $mergedPrStubs
   if (-not $pr) {
     $result.reason = 'unmerged-or-unknown'
     $result.evidence += 'no merged PR found for this head; not auto-deleting'
@@ -174,19 +255,19 @@ function Classify-Branch {
 $localCandidates = @()
 foreach ($b in (Get-LocalBranchNames -Root $RepoRoot)) {
   if ($b -eq $DefaultBranch) { continue }
+  if ($only.Count -gt 0 -and -not $only.Contains($b)) { continue }
   $tip = Get-BranchTipSha -RepoRoot $RepoRoot -Ref $b
   $c = Classify-Branch -Name $b -TipSha $tip -Scope 'local'
   $localCandidates += $c
 }
 
 $remoteCandidates = @()
-if ($DeleteRemote -or $true) {
-  # always classify remotes for report; only delete when -DeleteRemote and -Apply
-  $remotes = Get-RemoteBranchNames -RepoRoot $RepoRoot -Remote 'origin'
-  foreach ($rb in $remotes) {
-    $c = Classify-Branch -Name $rb.Name -TipSha $rb.Sha -Scope 'remote'
-    $remoteCandidates += $c
-  }
+# always classify remotes for report; only delete when -DeleteRemote and -Apply
+$remotes = Get-RemoteBranchNames -RepoRoot $RepoRoot -Remote 'origin'
+foreach ($rb in $remotes) {
+  if ($only.Count -gt 0 -and -not $only.Contains($rb.Name)) { continue }
+  $c = Classify-Branch -Name $rb.Name -TipSha $rb.Sha -Scope 'remote'
+  $remoteCandidates += $c
 }
 
 # --- execute local deletes ---
@@ -200,6 +281,19 @@ foreach ($c in $localCandidates) {
     continue
   }
   if ($dry) { continue }
+  $liveLocalTip = Get-BranchTipSha -RepoRoot $RepoRoot -Ref $c.name
+  if (-not $liveLocalTip) {
+    $c.action = 'already-absent-local'
+    $skippedLocal += $c
+    continue
+  }
+  if ($liveLocalTip -ne $c.tip_sha) {
+    $c.action = 'tip-moved-before-delete'
+    $c.safe_to_delete = $false
+    $c.evidence += "local tip changed after classification ($($c.tip_sha) -> $liveLocalTip)"
+    $skippedLocal += $c
+    continue
+  }
   $del = Remove-LocalSafeBranch -RepoRoot $RepoRoot -Name $c.name -Reason $c.reason
   if ($del.ExitCode -ne 0) {
     $c.action = 'delete-failed'
@@ -234,13 +328,48 @@ foreach ($c in $remoteCandidates) {
     continue
   }
   if ($dry) {
+    if ($fetchFailed) {
+      $c.action = 'fetch-failed-hold'
+      $c.safe_to_delete = $false
+      $c.reason = 'fetch-failed'
+      $c.evidence += 'origin fetch failed; remote deletion is not authorized from stale refs'
+      $skippedRemote += $c
+      continue
+    }
     $c.action = 'would-delete-remote'
+    continue
+  }
+  if ($fetchFailed) {
+    $c.action = 'fetch-failed'
+    $c.safe_to_delete = $false
+    $c.reason = 'fetch-failed'
+    $c.evidence += 'origin fetch failed; remote deletion is blocked until refs are refreshed'
+    $failedRemote += $c
     continue
   }
   # never delete remote of current branch (double-check)
   if ($c.name -eq $current) {
     $c.action = 'skip-current-remote'
     $c.safe_to_delete = $false
+    $skippedRemote += $c
+    continue
+  }
+  $liveRemote = Get-LiveRemoteBranchTip -RepoRoot $RepoRoot -Remote 'origin' -Name $c.name
+  if ($liveRemote.status -eq 'error') {
+    $c.action = 'remote-tip-recheck-failed'
+    $c.evidence += "live remote tip query failed: $(Protect-CloseoutText $liveRemote.output)"
+    $failedRemote += $c
+    continue
+  }
+  if ($liveRemote.status -eq 'absent') {
+    $c.action = 'already-absent-remote'
+    $skippedRemote += $c
+    continue
+  }
+  if ($liveRemote.sha -ne $c.tip_sha) {
+    $c.action = 'tip-moved-before-delete'
+    $c.safe_to_delete = $false
+    $c.evidence += "live remote tip changed after classification ($($c.tip_sha) -> $($liveRemote.sha))"
     $skippedRemote += $c
     continue
   }
@@ -278,6 +407,7 @@ if ($Json) {
     dry_run          = $dry
     apply            = (-not $dry)
     delete_remote    = [bool]$DeleteRemote
+    only_branches    = @($OnlyBranches)
     default_tip      = $defaultTip
     local            = $localCandidates
     remote           = $remoteCandidates
@@ -299,7 +429,7 @@ $anyLocal = $false
 foreach ($c in $localCandidates) {
   if ($c.reason -eq 'protected' -and $c.name -eq $DefaultBranch) { continue }
   # show interesting ones: safe, uncertain, tip-moved, worktree
-  if ($c.safe_to_delete -or $c.reason -match 'uncertain|tip-moved|worktree|unmerged|no-gh|current') {
+  if ($c.safe_to_delete -or $c.reason -match 'uncertain|tip-moved|worktree|unmerged|no-gh|current|open-pr|closed-unmerged|fetch-failed') {
     $anyLocal = $true
     $safe = if ($c.safe_to_delete) { 'SAFE' } else { 'HOLD' }
     Write-Output ("- {0}  [{1}] reason={2} action={3}" -f $c.name, $safe, $c.reason, $c.action)
@@ -319,7 +449,7 @@ Write-Output "## remote candidates (origin)"
 $anyRemote = $false
 foreach ($c in $remoteCandidates) {
   if ($c.name -eq $DefaultBranch) { continue }
-  if ($c.safe_to_delete -or $c.reason -match 'uncertain|tip-moved|worktree|unmerged|no-gh|current') {
+  if ($c.safe_to_delete -or $c.reason -match 'uncertain|tip-moved|worktree|unmerged|no-gh|current|open-pr|closed-unmerged|fetch-failed') {
     $anyRemote = $true
     $safe = if ($c.safe_to_delete) { 'SAFE' } else { 'HOLD' }
     Write-Output ("- origin/{0}  [{1}] reason={2} action={3}" -f $c.name, $safe, $c.reason, $c.action)

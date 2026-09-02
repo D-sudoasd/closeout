@@ -13,6 +13,8 @@ Agent: fill every field; use `(n/a)` or explicit skip reason. Prefer this over a
 - 进行中操作：
 
 ### 执行清单（写操作前已展示）
+- plan：
+- state / events：
 - 将执行：
 - 不会执行：
 - 用户确认：是/否/按 USER 默认授权
@@ -47,6 +49,8 @@ Agent: fill every field; use `(n/a)` or explicit skip reason. Prefer this over a
 - 证据：
 
 ### 清理
+- 已删除临时目录/文件：
+- 临时清理失败或跳过及原因：
 - 已删除本地：
 - 已删除远程：
 - 跳过及原因：（ancestor / squash-PR-match / tip-moved / worktree / uncertain）
@@ -59,7 +63,9 @@ Agent: fill every field; use `(n/a)` or explicit skip reason. Prefer this over a
 - 无可确认已合并遗留支：
 
 ### 未完成事项
-- 
+- 失败阶段：
+- 续跑命令：
+- 外部阻塞：
 
 ### 结论
 - clean desk：YES / NO

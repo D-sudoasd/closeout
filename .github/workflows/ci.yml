@@ -52,3 +52,8 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -File .\scripts\test_fixtures.ps1 -SkillRoot .
+
+      - name: Full orchestrator fixtures (plan, stale guard, cleanup, resume)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File .\scripts\test_orchestrator.ps1 -SkillRoot .

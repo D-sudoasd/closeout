@@ -46,7 +46,14 @@ if ($srcN.StartsWith($dstN + $sep) -or $srcN.StartsWith($dstN + '/')) {
   throw "Source is inside Destination; refusing to install over a parent of the source tree."
 }
 
-$required = @('SKILL.md', 'scripts\status.ps1', 'scripts\prune_merged.ps1', 'scripts\common.ps1')
+$required = @(
+  'SKILL.md',
+  'scripts\status.ps1',
+  'scripts\prune_merged.ps1',
+  'scripts\cleanup_temp.ps1',
+  'scripts\closeout.ps1',
+  'scripts\common.ps1'
+)
 foreach ($rel in $required) {
   if (-not (Test-Path (Join-Path $Source $rel))) {
     throw "Source incomplete, missing: $rel"

@@ -94,6 +94,12 @@ try {
     git commit -m "squash-only" | Out-Null
     $squashTip = (git rev-parse feat/squash).Trim()
     git checkout main | Out-Null
+    git checkout -b feat/open | Out-Null
+    "open" | Set-Content open.txt
+    git add open.txt
+    git commit -m "open-pr-head" | Out-Null
+    $openTip = (git rev-parse feat/open).Trim()
+    git checkout main | Out-Null
     git remote add origin https://github.com/example-org/fixture-repo.git
   } finally {
     Pop-Location
@@ -141,11 +147,21 @@ exit 1
   @(
     [ordered]@{
       headRefName = 'feat/squash'
+      baseRefName = 'main'
       headRefOid  = $squashTip
       number      = 1
       url         = 'https://example.test/pr/1'
       state       = 'MERGED'
       mergedAt    = '2026-01-01T00:00:00Z'
+    }
+    [ordered]@{
+      headRefName = 'feat/open'
+      baseRefName = 'main'
+      headRefOid  = $openTip
+      number      = 2
+      url         = 'https://example.test/pr/2'
+      state       = 'OPEN'
+      mergedAt    = $null
     }
   ) | ConvertTo-Json | Set-Content -LiteralPath $mergedPrPath -Encoding utf8
   $mergedPrJson = $mergedPrPath
@@ -196,6 +212,7 @@ exit 1
     if ($jsonText -notmatch 'squash-or-rebase-merged') { throw "prune JSON missing squash-or-rebase-merged`n$jsonText" }
     if ($jsonText -notmatch 'feat/demo') { throw "prune JSON missing feat/demo`n$jsonText" }
     if ($jsonText -notmatch 'ancestor-merged') { throw "prune JSON missing ancestor-merged`n$jsonText" }
+    if ($jsonText -notmatch 'feat/open' -or $jsonText -notmatch 'open-pr') { throw "open PR branch was not held`n$jsonText" }
   }
 
   Assert-Step 'squash-SAFE absent after Apply' {
