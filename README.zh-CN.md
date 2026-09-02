@@ -7,7 +7,7 @@
 
 **把活收完，桌子收拾干净。**
 
-面向 AI agent 的 git 收工技能：状态 → 验证 → 提交 → 推送 → PR → 合并门禁 → 清分支。强调 **授权边界**、**squash 可识别**、**可复核证据报告**。
+面向 AI agent 的 git 收工技能：计划 → 验证 → 提交 → 推送 → PR → 合并 → 临时目录与分支清理。强调 **一次确认、可续跑、授权边界** 和 **可复核证据报告**。
 
 [English](README.md) · [变更记录](CHANGELOG.md) · [安装](INSTALL.md) · [授权矩阵](references/auth-matrix.md) · [推广文案](docs/PROMOTE.md)
 
@@ -46,14 +46,14 @@
 
 | 阶段 | 做什么 | 门禁 |
 |-----:|--------|------|
-| 0 | 只读状态 | 出报告 |
-| 0b | 执行清单 | 确认或按 USER |
-| 2 | 验证 + 退出码（仓库测试；不依赖额外 skill） | 通过或明确失败策略 |
-| 3–5 | 提交 · 推送 · PR | SHA / head 核对 |
-| 6 | 合并 | **默认先问** |
-| 7 | 清分支 | 先列表再确认；远程单独授权 |
+| 0 | 只读状态与候选扫描 | 生成外部 plan.json |
+| 0b | 执行计划 | 用户确认计划内容 |
+| 2 | 验证 + 退出码 | 通过，或明确允许无测试 |
+| 3–5 | 提交 · 推送 · PR | 显式文件、SHA / head 核对 |
+| 6 | 立即尝试 squash merge | 不等待、不绕过保护 |
+| 7 | 清理临时目录与已合并分支 | 只处理计划内 SAFE 对象 |
 
-无 agent 也可直接跑脚本。务必把**目标仓库**写成 `-RepoRoot` 的绝对路径（cwd 可以是任意目录）：
+无 agent 也可直接跑完整编排器。务必把**目标仓库**写成 `-RepoRoot` 的绝对路径（cwd 可以是任意目录）：
 
 ```powershell
 $Skill = Join-Path $env:USERPROFILE ".grok\skills\closeout\scripts"
@@ -61,11 +61,16 @@ $Repo  = "D:\path\to\repo"
 
 pwsh -File "$Skill\status.ps1" -RepoRoot $Repo
 pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo          # 只列表
-# 确认 SAFE 列表后：
-# pwsh -File "$Skill\prune_merged.ps1" -RepoRoot $Repo -Apply
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Plan
+# 审阅 plan_file 后，一次确认覆盖 plan 中列出的全流程：
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Apply -PlanFile <plan.json>
+# 中途失败：
+pwsh -File "$Skill\closeout.ps1" -RepoRoot $Repo -Resume -StateFile <state.json>
 ```
 
-`prune_merged.ps1` 会读 `USER.md` 里的 `never_delete_branches` 与 `default_branch_prefer`。squash-SAFE 在 `-Apply` 时即使用 `git branch -d` 会拒绝也会删掉。
+`closeout.ps1` 会把 plan、state、事件和报告写到仓库外的运行目录。`cleanup_temp.ps1` 默认只清理明确可再生的缓存，不清理通用 `tmp`、`temp`、`build`、`dist`。`prune_merged.ps1` 支持 `-OnlyBranches`，squash-SAFE 在 `-Apply` 时即使用 `git branch -d` 会拒绝也会删掉。
+验证命令可通过 `-VerifyCommand "..."` 传入，也可在目标仓库提供 `closeout.verify.json` 的 `commands` 数组；没有项目级验证时，full-run 默认 BLOCKED。
+退出码：`0` 表示完整收工，`1` 表示阶段失败，`3` 表示计划 BLOCKED 或已过期；失败后直接使用 state 文件 `-Resume`。
 
 ---
 
@@ -99,7 +104,7 @@ PR 已合但 tip 已变          → HOLD
 
 | 你说 | 默认范围 |
 |------|----------|
-| 收工 / `/closeout` | 状态 + 验证 + **清单**；默认 `confirm_push=true`：一次确认覆盖提交→推送→PR。不自动合并、不删远程。 |
+| 收工 / `/closeout` | 状态 + plan；一次确认覆盖 plan 中的提交→推送→PR→立即合并→计划内清理。 |
 | 提交并推 | 验证 + 提交 + 推送 |
 | 合并 | 检查后合并 |
 | 清分支 | **只列表** |

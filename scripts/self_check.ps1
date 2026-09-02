@@ -24,7 +24,9 @@ $required = @(
   'references\report-template.md',
   'scripts\common.ps1',
   'scripts\status.ps1',
-  'scripts\prune_merged.ps1'
+  'scripts\prune_merged.ps1',
+  'scripts\cleanup_temp.ps1',
+  'scripts\closeout.ps1'
 )
 # README is required in the public git tree; optional for minimal skill-only copies
 $optionalNice = @('README.md', 'LICENSE')
@@ -44,7 +46,7 @@ foreach ($rel in $required) {
 }
 
 # parse scripts
-foreach ($script in @('common.ps1', 'status.ps1', 'prune_merged.ps1', 'self_check.ps1', 'test_fixtures.ps1')) {
+foreach ($script in @('common.ps1', 'status.ps1', 'prune_merged.ps1', 'cleanup_temp.ps1', 'closeout.ps1', 'self_check.ps1', 'test_fixtures.ps1', 'test_orchestrator.ps1')) {
   $path = Join-Path $SkillRoot "scripts\$script"
   if (-not (Test-Path $path)) { continue }
   $tokens = $null

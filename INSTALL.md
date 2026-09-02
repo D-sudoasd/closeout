@@ -7,7 +7,7 @@ Grok 的「收工 / 收尾 / ship」skill。版本见 `VERSION`。
 
 - 已安装 **Grok**（带 skills 的客户端）
 - **git**；做 PR / 合并需要 **GitHub CLI (`gh`)** 且已登录
-- **PowerShell 7+**（`pwsh`）以运行 `status.ps1` / `prune_merged.ps1`
+- **PowerShell 7+**（`pwsh`）以运行 `status.ps1` / `cleanup_temp.ps1` / `closeout.ps1`
 - Windows 优先；其他平台需自备 `pwsh`
 
 ## 推荐：git clone（便于更新）
@@ -70,6 +70,8 @@ closeout/
     common.ps1
     status.ps1
     prune_merged.ps1
+    cleanup_temp.ps1
+    closeout.ps1
     self_check.ps1
 ```
 
@@ -80,6 +82,11 @@ $root = Join-Path $env:USERPROFILE ".grok\skills\closeout"
 pwsh -File (Join-Path $root "scripts\self_check.ps1")
 # 在任意目录，对目标仓库传绝对路径：
 # pwsh -File (Join-Path $root "scripts\status.ps1") -RepoRoot D:\path\to\repo
+# 完整流程：先生成外部计划，确认后 Apply；失败后使用 state.json 续跑：
+# pwsh -File (Join-Path $root "scripts\closeout.ps1") -RepoRoot D:\path\to\repo -Plan
+# pwsh -File (Join-Path $root "scripts\closeout.ps1") -RepoRoot D:\path\to\repo -Apply -PlanFile <plan.json>
+# pwsh -File (Join-Path $root "scripts\closeout.ps1") -RepoRoot D:\path\to\repo -Resume -StateFile <state.json>
+# 或在目标仓库放置 closeout.verify.json：{"commands":["pwsh -NoProfile -File .\\scripts\\self_check.ps1 -SkillRoot ."]}
 ```
 
 ## 可选委托 skill

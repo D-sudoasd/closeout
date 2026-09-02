@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.2.0 — 2026-09-02
+
+### Added
+
+- `scripts/closeout.ps1`: plan, apply, checkpoint, resume, and evidence-report orchestration for commit, push, PR, merge, cleanup, and branch pruning.
+- `scripts/cleanup_temp.ps1`: repository-contained allowlisted cache cleanup with tracked-path, reparse-point, containment, fingerprint, and post-delete checks.
+- `scripts/test_orchestrator.ps1`: local bare-remote integration fixtures for full lifecycle and resume behavior.
+
+### Safety
+
+- Apply requires an external plan file and rejects changed HEAD, branch, working-tree status, or file content.
+- Full-run branch cleanup is limited to the plan-listed branch and confirmed merged SHA evidence; open and unmerged PRs are preserved.
+- Merge is attempted once with `--match-head-commit`; no `--auto`, `--admin`, force-push, or broad `git clean` path is used.
+
 ## 2.1.0 — 2026-09-02
 
 ### Fixed
