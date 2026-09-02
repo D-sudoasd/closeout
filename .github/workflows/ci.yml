@@ -47,3 +47,8 @@ jobs:
           if ($out -notmatch 'feat/demo') { throw 'expected feat/demo candidate' }
           if ($out -notmatch 'ancestor-merged') { throw 'expected ancestor-merged' }
           Write-Host "smoke OK"
+
+      - name: Fixture tests (cwd vs RepoRoot, squash Apply, USER never-delete, installer)
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File .\scripts\test_fixtures.ps1 -SkillRoot .

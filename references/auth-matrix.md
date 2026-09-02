@@ -5,7 +5,7 @@
 | User says | Default authorized scope |
 |-----------|--------------------------|
 | 先查状态 / 现在怎样 | Read-only status |
-| 收工 / 收尾 / `/closeout` | Status + verify + **execution plan**. If `confirm_push=false` (this install): also commit→push→PR. **Never** auto merge or remote delete. |
+| 收工 / 收尾 / `/closeout` | Status + verify + **execution plan**. Shipped `confirm_push=true`: one OK of that plan covers commit→push→PR. If a local USER.md sets `confirm_push=false`, skip the extra OK and run 2–5. **Never** auto merge or remote delete. |
 | `/closeout --apply` + plan | Write ops listed in the confirmed plan only |
 | 提交 | Verify + commit (no push unless also asked) |
 | 提交并推 | Verify + commit + push |
@@ -20,7 +20,7 @@
 - Merge PR (`confirm_merge`)
 - Delete remote branch (`confirm_delete_remote`)
 - Force push with lease (always ask; never on default branch)
-- `git branch -D`, `reset --hard`, `clean -fdx`
+- `git branch -D` except `prune_merged.ps1 -Apply` on a classified SAFE local (squash, or ancestor when `-d` refuses); `reset --hard`; `clean -fdx`
 
 ## Verify outcomes
 

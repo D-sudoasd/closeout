@@ -36,7 +36,9 @@ if ($stashList.ExitCode -eq 0 -and $stashList.Output.Trim()) {
   $stashCount = @($stashList.Lines | Where-Object { $_.Trim() }).Count
 }
 
-$default = Get-DefaultBranch -RepoRoot $RepoRoot
+$skillRoot = Split-Path -Parent $here
+$userCfg = Get-CloseoutUserConfig -SkillRoot $skillRoot
+$default = Get-DefaultBranch -RepoRoot $RepoRoot -Prefer $userCfg.default_branch_prefer
 
 # classified dirty
 $staged = @()
@@ -89,18 +91,13 @@ foreach ($rn in $remoteNames.Lines) {
   }
 }
 
-# PR
+# PR (bound to RepoRoot, not process cwd)
 $pr = $null
-if (Test-CommandAvailable -Name 'gh') {
-  $prev = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    $raw = gh pr view --json number,url,state,title,mergeable,isDraft,baseRefName,headRefName,headRefOid 2>$null
-    if ($LASTEXITCODE -eq 0 -and $raw) {
-      $pr = $raw | ConvertFrom-Json
-    }
-  } catch {}
-  finally { $ErrorActionPreference = $prev }
+$prView = Invoke-Gh -RepoRoot $RepoRoot -Arguments @(
+  'pr', 'view', '--json', 'number,url,state,title,mergeable,isDraft,baseRefName,headRefName,headRefOid'
+) -AllowFailure
+if ($prView.ExitCode -eq 0 -and $prView.Output.Trim()) {
+  try { $pr = $prView.Output | ConvertFrom-Json } catch { $pr = $null }
 }
 
 # merged locals (ancestor only — prune script does squash)

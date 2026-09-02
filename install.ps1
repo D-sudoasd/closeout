@@ -31,6 +31,21 @@ if (-not $Destination) {
   $Destination = Join-Path $env:USERPROFILE '.grok\skills\closeout'
 }
 
+function Get-NormalizedFullPath {
+  param([Parameter(Mandatory)][string]$Path)
+  return [IO.Path]::GetFullPath($Path).TrimEnd('\', '/').ToLowerInvariant()
+}
+
+$srcN = Get-NormalizedFullPath -Path $Source
+$dstN = Get-NormalizedFullPath -Path $Destination
+if ($srcN -eq $dstN) {
+  throw "Source and Destination are the same path ($Source). Refusing to move the only copy of the tree. Use git pull in the live install, or pass a different -Source (unpacked pack) than -Destination."
+}
+$sep = [IO.Path]::DirectorySeparatorChar
+if ($srcN.StartsWith($dstN + $sep) -or $srcN.StartsWith($dstN + '/')) {
+  throw "Source is inside Destination; refusing to install over a parent of the source tree."
+}
+
 $required = @('SKILL.md', 'scripts\status.ps1', 'scripts\prune_merged.ps1', 'scripts\common.ps1')
 foreach ($rel in $required) {
   if (-not (Test-Path (Join-Path $Source $rel))) {

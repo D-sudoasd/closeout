@@ -3,6 +3,8 @@
 Copy to `USER.md` on first install. **Upgrades must not overwrite `USER.md`.**  
 Agent: read `USER.md` if present, else this file. Append under Corrections only after user confirms lasting preference changes.
 
+Scripts (`status.ps1`, `prune_merged.ps1`) parse `never_delete_branches` and `default_branch_prefer` from this table. Other keys are agent-facing.
+
 ## Defaults (safe for new installs)
 
 | Key | Value |

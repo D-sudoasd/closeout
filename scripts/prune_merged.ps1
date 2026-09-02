@@ -14,7 +14,9 @@
 param(
   [string]$RepoRoot = '.',
   [string]$DefaultBranch = '',
-  [string[]]$NeverDelete = @('main', 'master', 'develop'),
+  [string[]]$NeverDelete = @(),
+  [string]$UserConfigPath = '',
+  [string]$MergedPrJson = '',
   [switch]$Apply,
   [switch]$DeleteRemote,
   [switch]$WhatIf,
@@ -32,8 +34,24 @@ if ($WhatIf) { $dry = $true }
 $probe = Invoke-Git -RepoRoot $RepoRoot -Arguments @('rev-parse', '--git-dir') -AllowFailure
 if ($probe.ExitCode -ne 0) { throw "Not a git repo: $RepoRoot" }
 
+$skillRoot = Split-Path -Parent $here
+$userCfg = Get-CloseoutUserConfig -SkillRoot $skillRoot -UserConfigPath $UserConfigPath
+$protect = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($n in @($userCfg.never_delete_branches)) { if ($n) { [void]$protect.Add($n) } }
+foreach ($n in @($NeverDelete)) { if ($n) { [void]$protect.Add($n) } }
+$NeverDelete = @($protect)
+
+$mergedPrStubs = $null
+if ($MergedPrJson) {
+  $rawPr = $MergedPrJson
+  if (Test-Path -LiteralPath $MergedPrJson) {
+    $rawPr = Get-Content -LiteralPath $MergedPrJson -Raw -Encoding utf8
+  }
+  $mergedPrStubs = $rawPr | ConvertFrom-Json
+}
+
 if (-not $DefaultBranch) {
-  $DefaultBranch = Get-DefaultBranch -RepoRoot $RepoRoot
+  $DefaultBranch = Get-DefaultBranch -RepoRoot $RepoRoot -Prefer $userCfg.default_branch_prefer
 }
 
 $current = (Invoke-Git -RepoRoot $RepoRoot -Arguments @('branch', '--show-current') -AllowFailure).Output.Trim()
@@ -119,14 +137,14 @@ function Classify-Branch {
   $result.evidence += "tip $TipSha is NOT ancestor of $DefaultBranch (likely squash/rebase or unmerged)"
 
   # 2) squash/rebase via merged PR + tip match
-  if (-not $ghOk) {
+  if (-not $ghOk -and $null -eq $mergedPrStubs) {
     $result.reason = 'uncertain-no-gh'
     $result.evidence += 'gh unavailable; cannot confirm squash/rebase PR merge'
     $result.action = 'report-only'
     return [pscustomobject]$result
   }
 
-  $pr = Get-MergedPrForHead -HeadBranch $Name
+  $pr = Get-MergedPrForHead -HeadBranch $Name -RepoRoot $RepoRoot -StubRecords $mergedPrStubs
   if (-not $pr) {
     $result.reason = 'unmerged-or-unknown'
     $result.evidence += 'no merged PR found for this head; not auto-deleting'
@@ -182,10 +200,10 @@ foreach ($c in $localCandidates) {
     continue
   }
   if ($dry) { continue }
-  $del = Invoke-Git -RepoRoot $RepoRoot -Arguments @('branch', '-d', $c.name) -AllowFailure
+  $del = Remove-LocalSafeBranch -RepoRoot $RepoRoot -Name $c.name -Reason $c.reason
   if ($del.ExitCode -ne 0) {
     $c.action = 'delete-failed'
-    $c.evidence += "git branch -d failed: $($del.Output)"
+    $c.evidence += "local delete failed: $($del.Output)"
     $failedLocal += $c
     continue
   }

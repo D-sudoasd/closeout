@@ -1,20 +1,13 @@
 # Phases — commands and gates
 
-Resolve default branch:
-
-```powershell
-# prefer gh, then origin/HEAD, then main/master
-# or: Get-DefaultBranch in scripts/common.ps1
-gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>$null
-git symbolic-ref refs/remotes/origin/HEAD 2>$null  # -> origin/main
-```
+Resolve default branch via `Get-DefaultBranch` in `scripts/common.ps1` (pass `-Prefer` from USER `default_branch_prefer`). That helper binds `gh` to `-RepoRoot`, not process cwd.
 
 ## 0 status
 
 ```powershell
-pwsh -File "...\closeout\scripts\status.ps1" -RepoRoot .
+pwsh -File "...\closeout\scripts\status.ps1" -RepoRoot <absolute-repo>
 # optional machine-readable:
-pwsh -File "...\closeout\scripts\status.ps1" -RepoRoot . -Json
+pwsh -File "...\closeout\scripts\status.ps1" -RepoRoot <absolute-repo> -Json
 ```
 
 Report must include: root, branch, full/short HEAD, default, upstream, ahead/behind, staged/unstaged/untracked/conflicted counts, in-progress ops, redacted remotes, PR, tools, worktrees.
@@ -34,7 +27,7 @@ Before any write op, show:
 本次不会执行：merge / remote delete / force
 ```
 
-**Gate:** user confirms, or USER `confirm_push=false` and mode is full/收工 for the listed push/PR items only.
+**Gate:** user confirms the plan, or USER `confirm_push=false` and the mode is 收工 for the listed push/PR items only. Merge and remote delete are never in that OK.
 
 ## 1 diagnose
 
@@ -53,10 +46,10 @@ git diff --check
 git diff --cached --check
 ```
 
-Plus repo tests from AGENTS.md / README / CI / package scripts.  
+Do **not** require a `check-work` skill. Discover tests: AGENTS.md → package scripts → CI → README.  
 Scientific repos: staged size, raw data paths, binary accidents.
 
-Outcomes: [auth-matrix.md](auth-matrix.md) / SKILL Verify outcomes.  
+Outcomes: [auth-matrix.md](auth-matrix.md).  
 **Gate:** pass, or explicit user policy for fail (local-only vs push override).
 
 ## 3 commit
@@ -134,14 +127,15 @@ git pull --ff-only
 ## 7 prune
 
 ```powershell
-pwsh -File "...\prune_merged.ps1" -RepoRoot .           # dry-run list + evidence
+pwsh -File "...\prune_merged.ps1" -RepoRoot <absolute-repo>           # dry-run list + evidence
 # after user OK for local:
-pwsh -File "...\prune_merged.ps1" -RepoRoot . -Apply
+pwsh -File "...\prune_merged.ps1" -RepoRoot <absolute-repo> -Apply
 # remote only after separate OK:
-pwsh -File "...\prune_merged.ps1" -RepoRoot . -Apply -DeleteRemote
+pwsh -File "...\prune_merged.ps1" -RepoRoot <absolute-repo> -Apply -DeleteRemote
 ```
 
-Detection: ancestor **or** merged PR with matching head SHA.  
+The script reads USER `never_delete_branches` / `default_branch_prefer`. Classification is in `Classify-Branch` (ancestor **or** merged PR head SHA == tip).  
+After `-Apply`, squash-SAFE locals are deleted even when `git branch -d` would refuse.  
 Tip-moved after merge → HOLD.  
 Remote list via `for-each-ref` (skip HEAD/symref).  
 Each delete rechecked.  
@@ -149,6 +143,6 @@ Each delete rechecked.
 
 ## full order
 
-`0 → 0b → 2 → 3 → 4 → 5 → [ask merge] → 6? → 7 list → [ask remote delete]`.  
+收工: `0 → 0b`; after one OK of the plan: `2 → 3 → 4 → 5`. Then ask merge (`6?`) and prune list (`7`); remote delete is a separate ask.  
 Insert **1** when bugs remain.  
 Verify fail without override: **stop**, no push of broken work.

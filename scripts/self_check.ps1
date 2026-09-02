@@ -44,7 +44,7 @@ foreach ($rel in $required) {
 }
 
 # parse scripts
-foreach ($script in @('common.ps1', 'status.ps1', 'prune_merged.ps1', 'self_check.ps1')) {
+foreach ($script in @('common.ps1', 'status.ps1', 'prune_merged.ps1', 'self_check.ps1', 'test_fixtures.ps1')) {
   $path = Join-Path $SkillRoot "scripts\$script"
   if (-not (Test-Path $path)) { continue }
   $tokens = $null

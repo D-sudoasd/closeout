@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.0 — 2026-09-02
+
+### Fixed
+
+- `status.ps1` / `prune_merged.ps1` bind `gh` to `-RepoRoot` (`Set-Location` plus `gh -R` from upstream, then github, then origin), so squash detection and PR status work when process cwd is not the target repo.
+- Authorized `-Apply` deletes squash-SAFE locals (`git branch -D` after classification). `git branch -d` alone cannot remove a non-ancestor squash tip.
+- `prune_merged.ps1` reads USER `never_delete_branches` and `default_branch_prefer`.
+- `install.ps1` refuses Source == Destination (and Source inside Destination) before any `Move-Item`.
+- Phase 2 verify no longer requires a `check-work` skill.
+
+### Changed
+
+- Trigger / auth / verify text matches shipped `confirm_push=true` (plan first; one OK covers 2–5).
+- Fixture tests in `scripts/test_fixtures.ps1` (cwd ≠ RepoRoot, squash Apply, USER never-delete, installer same-path).
+
 ## 2.0.0 — 2026-07-25
 
 ### Docs / packaging

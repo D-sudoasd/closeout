@@ -78,8 +78,8 @@ closeout/
 ```powershell
 $root = Join-Path $env:USERPROFILE ".grok\skills\closeout"
 pwsh -File (Join-Path $root "scripts\self_check.ps1")
-# 在任意 git 仓库：
-# pwsh -File (Join-Path $root "scripts\status.ps1") -RepoRoot .
+# 在任意目录，对目标仓库传绝对路径：
+# pwsh -File (Join-Path $root "scripts\status.ps1") -RepoRoot D:\path\to\repo
 ```
 
 ## 可选委托 skill
@@ -87,7 +87,7 @@ pwsh -File (Join-Path $root "scripts\self_check.ps1")
 | 场景 | skill |
 |------|--------|
 | 硬 bug | diagnosing-bugs |
-| 提交前自检 | check-work |
+| 提交前自检 | 仓库测试（AGENTS.md → 包脚本 → CI → README） |
 | 只 yeet 提交开 PR | yeet |
 | PR CI 修红 | gh-fix-ci |
 | 处理 review 评论 | gh-address-comments |

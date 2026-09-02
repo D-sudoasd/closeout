@@ -15,7 +15,7 @@ If squash-merged branches were not evaluated (e.g. `gh` missing), **clean desk m
 
 ## Never auto-delete
 
-- Branches in `never_delete_branches` (main/master/develop)  
+- Branches in USER `never_delete_branches` (scripts read the key; example default is main/master/develop)  
 - Current branch (local **and** its remote)  
 - Default branch remote  
 - Branches with **unique unmerged commits**  
@@ -30,7 +30,7 @@ If squash-merged branches were not evaluated (e.g. `gh` missing), **clean desk m
 2. Enumerate local heads; classify ancestor vs squash-PR vs HOLD  
 3. Enumerate remotes via `for-each-ref` (skip symref/HEAD)  
 4. Show table: name, reason, evidence, SAFE/HOLD  
-5. User confirms local deletes → `git branch -d` (not `-D`) → recheck gone  
+5. User confirms local deletes → `prune_merged.ps1 -Apply` (ancestor: `git branch -d`, then `-D` if HEAD is not default; squash-SAFE: `-D` because the tip is not an ancestor) → recheck gone  
 6. User confirms remote deletes → `git push origin --delete` → fetch prune → recheck gone  
 7. `git worktree list` — remove stale paths only if safe + OK  
 8. Checkout default, `git status -sb`, emit evidence report  
@@ -38,6 +38,6 @@ If squash-merged branches were not evaluated (e.g. `gh` missing), **clean desk m
 ## Dangerous commands (require explicit user OK)
 
 - `git reset --hard`  
-- `git branch -D` / `git push --force` without lease  
+- `git branch -D` outside `prune_merged.ps1 -Apply` on a classified SAFE local / `git push --force` without lease  
 - `git clean -fdx`  
 - Amending published commits on shared branches  

@@ -55,6 +55,79 @@ function Protect-RemoteUrl {
   return ($Url -replace '://([^/@]+)@', '://***@' -replace '://([^:]+):([^@]+)@', '://***@')
 }
 
+function Get-GitHubRepoSlug {
+  param([Parameter(Mandatory)][string]$RepoRoot)
+
+  # Prefer upstream (forks keep merged PRs on the parent), then github, then origin.
+  foreach ($remote in @('upstream', 'github', 'origin')) {
+    $url = (Invoke-Git -RepoRoot $RepoRoot -Arguments @('remote', 'get-url', $remote) -AllowFailure).Output.Trim()
+    if (-not $url) { continue }
+    if ($url -match 'github\.com[:/](?<owner>[^/]+)/(?<repo>[^/]+?)(?:\.git)?/?$') {
+      return ($Matches['owner'] + '/' + $Matches['repo'])
+    }
+  }
+  return $null
+}
+
+function Invoke-Gh {
+  param(
+    [Parameter(Mandatory)][string]$RepoRoot,
+    [Parameter(Mandatory)][string[]]$Arguments,
+    [switch]$AllowFailure
+  )
+
+  if (-not (Test-CommandAvailable -Name 'gh')) {
+    return [pscustomobject]@{
+      ExitCode = 127
+      Output   = 'gh not available'
+      Lines    = @('gh not available')
+    }
+  }
+
+  $ghArgs = @()
+  $slug = Get-GitHubRepoSlug -RepoRoot $RepoRoot
+  if ($slug) { $ghArgs += @('-R', $slug) }
+  $ghArgs += $Arguments
+
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $prevLoc = Get-Location
+  $stdoutParts = @()
+  $stderrParts = @()
+  try {
+    Set-Location -LiteralPath $RepoRoot
+    $output = & gh @ghArgs 2>&1
+    $exitCode = $LASTEXITCODE
+    foreach ($item in @($output)) {
+      if ($item -is [System.Management.Automation.ErrorRecord]) {
+        $stderrParts += "$item"
+      } else {
+        $stdoutParts += "$item"
+      }
+    }
+  } catch {
+    $stderrParts += "$_"
+    $exitCode = 1
+  } finally {
+    Set-Location $prevLoc
+    $ErrorActionPreference = $prevEap
+  }
+
+  $text = $stdoutParts -join "`n"
+  $errText = $stderrParts -join "`n"
+
+  if ($exitCode -ne 0 -and -not $AllowFailure) {
+    throw "gh $($Arguments -join ' ') failed with exit code $exitCode`n$text`n$errText"
+  }
+
+  [pscustomobject]@{
+    ExitCode = $exitCode
+    Output   = $text
+    StdErr   = $errText
+    Lines    = @(if ($text) { $text -split "`r?`n" } else { @() })
+  }
+}
+
 function Get-DefaultBranch {
   param(
     [Parameter(Mandatory)][string]$RepoRoot,
@@ -62,10 +135,13 @@ function Get-DefaultBranch {
   )
 
   $name = $null
-  try {
-    $name = (gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>$null)
-    if ($name) { $name = $name.Trim() }
-  } catch {}
+  $view = Invoke-Gh -RepoRoot $RepoRoot -Arguments @(
+    'repo', 'view', '--json', 'defaultBranchRef', '-q', '.defaultBranchRef.name'
+  ) -AllowFailure
+  if ($view.ExitCode -eq 0) {
+    $token = $view.Output.Trim()
+    if ($token -match '^[A-Za-z0-9._/-]+$') { $name = $token }
+  }
 
   if (-not $name) {
     $sym = Invoke-Git -RepoRoot $RepoRoot -Arguments @('symbolic-ref', 'refs/remotes/origin/HEAD') -AllowFailure
@@ -84,6 +160,60 @@ function Get-DefaultBranch {
 
   if (-not $name) { $name = 'main' }
   return $name
+}
+
+function Get-CloseoutUserConfig {
+  param(
+    [string]$SkillRoot = '',
+    [string]$UserConfigPath = ''
+  )
+
+  $path = $UserConfigPath
+  if (-not $path -and $SkillRoot) {
+    foreach ($name in @('USER.md', 'USER.example.md')) {
+      $candidate = Join-Path $SkillRoot $name
+      if (Test-Path -LiteralPath $candidate) {
+        $path = $candidate
+        break
+      }
+    }
+  }
+
+  $cfg = [ordered]@{
+    never_delete_branches = @('main', 'master', 'develop')
+    default_branch_prefer = 'main'
+    source_path           = $path
+  }
+
+  if (-not $path -or -not (Test-Path -LiteralPath $path)) {
+    return [pscustomobject]$cfg
+  }
+
+  $text = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+  foreach ($line in ($text -split "`r?`n")) {
+    if ($line -notmatch '^\|\s*`([^`]+)`\s*\|\s*(.+?)\s*\|') { continue }
+    $key = $Matches[1].Trim()
+    $raw = $Matches[2].Trim()
+    $raw = $raw -replace '\s+[—–]\s+.*$', ''
+    switch ($key) {
+      'never_delete_branches' {
+        $names = @()
+        foreach ($part in ($raw -split ',')) {
+          $n = $part.Trim().Trim('`')
+          if ($n) { $names += $n }
+        }
+        if ($names.Count -gt 0) { $cfg.never_delete_branches = $names }
+      }
+      'default_branch_prefer' {
+        $prefer = $null
+        if ($raw -match '`([^`]+)`') { $prefer = $Matches[1].Trim() }
+        elseif ($raw -match '^(\S+)') { $prefer = $Matches[1].Trim('`', ',', ' ') }
+        if ($prefer) { $cfg.default_branch_prefer = $prefer }
+      }
+    }
+  }
+
+  return [pscustomobject]$cfg
 }
 
 function Get-InProgressGitOps {
@@ -147,27 +277,59 @@ function Get-BranchTipSha {
 function Get-MergedPrForHead {
   <#
     Returns latest merged PR for a head branch name, or $null.
-    Uses gh. Fields: number, url, headRefOid, headRefName, state, mergedAt
+    Uses gh against RepoRoot (not process cwd). Fields: number, url, headRefOid, headRefName, state, mergedAt
+    StubRecords: optional injected list for tests (same shape as gh JSON objects).
   #>
   param(
-    [Parameter(Mandatory)][string]$HeadBranch
+    [Parameter(Mandatory)][string]$HeadBranch,
+    [Parameter(Mandatory)][string]$RepoRoot,
+    $StubRecords = $null
   )
 
-  $prevEap = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
+  if ($null -ne $StubRecords) {
+    $hits = @($StubRecords | Where-Object { $_.headRefName -eq $HeadBranch })
+    if ($hits.Count -eq 0) { return $null }
+    $sortedStubs = @($hits | Sort-Object { $_.mergedAt } -Descending)
+    return $sortedStubs[0]
+  }
+
+  $r = Invoke-Gh -RepoRoot $RepoRoot -Arguments @(
+    'pr', 'list',
+    '--state', 'merged',
+    '--head', $HeadBranch,
+    '--limit', '5',
+    '--json', 'number,url,state,headRefOid,headRefName,mergedAt'
+  ) -AllowFailure
+  if ($r.ExitCode -ne 0 -or -not $r.Output.Trim()) { return $null }
   try {
-    $json = gh pr list --state merged --head $HeadBranch --limit 5 --json number,url,state,headRefOid,headRefName,mergedAt 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not $json) { return $null }
-    $items = $json | ConvertFrom-Json
-    if (-not $items -or @($items).Count -eq 0) { return $null }
-    # most recently merged first if available
-    $sorted = @($items | Sort-Object { $_.mergedAt } -Descending)
-    return $sorted[0]
+    $items = $r.Output | ConvertFrom-Json
   } catch {
     return $null
-  } finally {
-    $ErrorActionPreference = $prevEap
   }
+  if (-not $items -or @($items).Count -eq 0) { return $null }
+  $sorted = @($items | Sort-Object { $_.mergedAt } -Descending)
+  return $sorted[0]
+}
+
+function Remove-LocalSafeBranch {
+  <#
+    Delete a local branch already classified SAFE.
+    ancestor-merged: try -d, then -D if git refuses because HEAD is not default.
+    squash-or-rebase-merged: -D (tip is not an ancestor; -d cannot succeed).
+  #>
+  param(
+    [Parameter(Mandatory)][string]$RepoRoot,
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)][string]$Reason
+  )
+
+  $useForce = ($Reason -eq 'squash-or-rebase-merged')
+  $flag = if ($useForce) { '-D' } else { '-d' }
+  $del = Invoke-Git -RepoRoot $RepoRoot -Arguments @('branch', $flag, '--', $Name) -AllowFailure
+  if ($del.ExitCode -ne 0 -and -not $useForce -and $Reason -eq 'ancestor-merged') {
+    $del = Invoke-Git -RepoRoot $RepoRoot -Arguments @('branch', '-D', '--', $Name) -AllowFailure
+  }
+  return $del
 }
 
 function Get-RemoteBranchNames {
