@@ -253,8 +253,8 @@ exit 1
       '-Destination', $pack
     )
     if ($r.ExitCode -eq 0) { throw "install succeeded for Source==Destination; must fail closed`n$($r.Combined)" }
-    $flat = ($r.Combined -replace '\s+', ' ')
-    if ($flat -notmatch 'same path' -or $flat -notmatch 'Refusing to move') {
+    # pwsh ErrorRecord wrapping inserts "|" between words; match tokens that survive that.
+    if ($r.Combined -notmatch 'same path' -or $r.Combined -notmatch 'Refusing') {
       throw "install did not fail on the Source==Destination guard. output:`n$($r.Combined)"
     }
     if ($r.Combined -match 'Backed up previous install' -or $r.Combined -match 'INSTALL FAILED') {
