@@ -355,7 +355,9 @@ function Get-PrView {
   param([Parameter(Mandatory)][string]$Root)
 
   $fields = 'number,url,state,title,mergeable,isDraft,baseRefName,headRefName,headRefOid,mergedAt,mergeCommit,reviewDecision,mergeStateStatus,statusCheckRollup'
-  $r = Invoke-OriginGitHub -Root $Root -Arguments @('pr', 'view', '--json', $fields) -AllowFailure
+  $branch = (Invoke-Git -RepoRoot $Root -Arguments @('branch', '--show-current') -AllowFailure).Output.Trim()
+  if (-not $branch) { return $null }
+  $r = Invoke-OriginGitHub -Root $Root -Arguments @('pr', 'view', $branch, '--json', $fields) -AllowFailure
   if ($r.ExitCode -ne 0 -or -not $r.Output.Trim()) { return $null }
   try { return ($r.Output | ConvertFrom-Json) } catch { return $null }
 }
