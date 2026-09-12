@@ -1,3 +1,5 @@
+> **Moved.** This skill now lives in the private library [D-sudoasd/my-skills](https://github.com/D-sudoasd/my-skills) at `skills/coding/closeout` (`$closeout`). This repository is archived. Do not open PRs here.
+
 # closeout
 
 [![CI](https://github.com/D-sudoasd/closeout/actions/workflows/ci.yml/badge.svg)](https://github.com/D-sudoasd/closeout/actions/workflows/ci.yml)
